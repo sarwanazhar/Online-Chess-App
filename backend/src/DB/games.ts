@@ -68,9 +68,25 @@ const gameSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
-    timeLimit: {
+    timeControl: {
         type: String,
-        default: '1-0',
+        required: true,
+    },
+    whiteTimeRemaining: {
+        type: Number,
+        required: true,
+    },
+    blackTimeRemaining: {
+        type: Number,
+        required: true,
+    },
+    timeIncrement: {
+        type: Number,
+        required: true,
+    },
+    lastMoveTime: {
+        type: Number,
+        required: true,
     },
 });
 

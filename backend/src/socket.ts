@@ -7,6 +7,14 @@ let waitingUsers = new Map<string, { userId: string, socket: any, timeControl: s
 const DEFAULT_POSITION = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 let activeGames = new Map()
 
+// Time control settings (in milliseconds)
+const TIME_CONTROLS = {
+    'bullet': { initial: 60000, increment: 0 },      // 1 minute
+    'blitz': { initial: 300000, increment: 0 },     // 5 minutes
+    'rapid': { initial: 600000, increment: 0 },     // 10 minutes
+    'classical': { initial: 1800000, increment: 0 } // 30 minutes
+};
+
 export const socketFunctions = (io: Server) => {
     io.on('connection', (socket) => {
         console.log("A user connected:", socket.id);
@@ -15,33 +23,42 @@ export const socketFunctions = (io: Server) => {
             console.log("A user joined:", userId);
             waitingUsers.set(socket.id, { userId, socket, timeControl });
 
-            if (waitingUsers.size >= 2) {
-                const iterator = waitingUsers.values();
-                const player1 = iterator.next().value;
-                const player2 = iterator.next().value;
+            if(waitingUsers.size >= 2){
 
-                if (!player1 || !player2) {
-                    return;
+            // Find a player with matching time control
+            let matchedPlayer = null;
+            for (const [socketId, player] of waitingUsers.entries()) {
+                if (socketId !== socket.id && player.timeControl == timeControl) {
+                    matchedPlayer = player;
+                    break;
                 }
+            }
 
-                waitingUsers.delete(player1.socket.id);
-                waitingUsers.delete(player2.socket.id);
+            if (matchedPlayer) {
+                // Remove both players from waiting list
+                waitingUsers.delete(socket.id);
+                waitingUsers.delete(matchedPlayer.socket.id);
 
                 const roomId = uuidv4();
 
-                player1.socket.join(roomId);
-                player2.socket.join(roomId);
+                socket.join(roomId);
+                matchedPlayer.socket.join(roomId);
 
                 const createGame = async () => {
+                    const timeSettings = TIME_CONTROLS[timeControl as keyof typeof TIME_CONTROLS];
                     const game = new Game({
                         roomId,
-                        whitePlayer: player1.userId,
-                        blackPlayer: player2.userId,
+                        whitePlayer: userId,
+                        blackPlayer: matchedPlayer.userId,
                         currentFen: DEFAULT_POSITION,
                         isWhiteTurn: true,
-                        whitePlayerSocketId: player1.socket.id,
-                        blackPlayerSocketId: player2.socket.id,
-                        timeControl: player1.timeControl,
+                        whitePlayerSocketId: socket.id,
+                        blackPlayerSocketId: matchedPlayer.socket.id,
+                        timeControl: timeControl,
+                        whiteTimeRemaining: timeSettings.initial,
+                        blackTimeRemaining: timeSettings.initial,
+                        timeIncrement: timeSettings.increment,
+                        lastMoveTime: Date.now()
                     })
                     await game.save();
                     game.populate("whitePlayer blackPlayer");
@@ -52,10 +69,14 @@ export const socketFunctions = (io: Server) => {
                         blackPlayer: game.blackPlayer,
                         currentFen: game.currentFen,
                         isWhiteTurn: game.isWhiteTurn,
+                        timeControl: timeControl,
+                        whiteTimeRemaining: game.whiteTimeRemaining,
+                        blackTimeRemaining: game.blackTimeRemaining,
                     })
                 }
                 createGame();
             }
+        }
         })
 
         socket.on("move", async ({userId, roomId, move}) => {
@@ -66,6 +87,7 @@ export const socketFunctions = (io: Server) => {
                 return;
             }
             let team = game.whitePlayer == userId ? "white" : "black";
+            console.log(team);
             if(team === "white" && !game.isWhiteTurn){
                 return;
             }
@@ -77,34 +99,62 @@ export const socketFunctions = (io: Server) => {
                 const chess = new Chess();
                 try {
                     chess.load(game.currentFen);
+                    console.log(chess.fen());
                 } catch (e) {
                     console.log(e);
                 }
                 if (typeof chess.move(move) === "object") {
+                    console.log("move")
+                    const currentTime = Date.now();
+                    const timeElapsed = currentTime - game.lastMoveTime;
+                    game.whiteTimeRemaining = Math.max(0, game.whiteTimeRemaining - timeElapsed + game.timeIncrement);
+                    game.lastMoveTime = currentTime; 
+                    console.log(game.whiteTimeRemaining);
+                    if(game.whiteTimeRemaining <= 0){
+                        io.to(roomId).emit("gameOver", {
+                            roomId,
+                            winner: "black",
+                        })
+                        game.isOngoing = false;
+                        await game.save();
+                        return;
+                    }
                     if(chess.isCheckmate()){
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "white",
                         })
+                        game.isOngoing = false;
+                        await game.save();
+                        return;
                     } else if(chess.isStalemate()){
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "draw",
                         })
+                        game.isOngoing = false;
+                        await game.save();
+                        return;
                     }else if (chess.isDraw()){
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "draw",
                         })
+                        game.isOngoing = false;
+                        await game.save();
+                        return;
                     } else {
                         game.currentFen = chess.fen();
                         console.log(chess.fen());
                         game.isWhiteTurn = false;
+                        game.lastMoveTime = currentTime;
                         await game.save();
                         io.to(roomId).emit("move", {
                             roomId,
                             currentFen: game.currentFen,
                             isWhiteTurn: game.isWhiteTurn,
+                            whiteTimeRemaining: game.whiteTimeRemaining,
+                            blackTimeRemaining: game.blackTimeRemaining
                         })
                     }
                 }
@@ -115,30 +165,57 @@ export const socketFunctions = (io: Server) => {
                 } catch (e) {
                     console.log(e);
                 }
+                console.log(chess.fen());
                 if (typeof chess.move(move) === "object") {
+                    const currentTime = Date.now();
+                    const timeElapsed = currentTime - game.lastMoveTime;
+                    game.blackTimeRemaining = Math.max(0, game.blackTimeRemaining - timeElapsed + game.timeIncrement);
+                    game.lastMoveTime = currentTime;
+                    console.log(game.blackTimeRemaining);
+                    if(game.blackTimeRemaining <= 0){
+                        io.to(roomId).emit("gameOver", {
+                            roomId,
+                            winner: "white",
+                        })
+                        game.isOngoing = false;
+                        await game.save();
+                        return;
+                    }
                     if(chess.isCheckmate()){
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "black",
                         })
+                        game.isOngoing = false;
+                        await game.save();
+                        return;
                     } else if(chess.isStalemate()){
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "draw",
                         })
+                        game.isOngoing = false;
+                        await game.save();
+                        return;
                     }else if (chess.isDraw()){
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "draw",
                         })
+                        game.isOngoing = false;
+                        await game.save();
+                        return;
                     } else {
                         game.currentFen = chess.fen();
                         game.isWhiteTurn = true;
+                        game.lastMoveTime = currentTime;
                         await game.save();
                         io.to(roomId).emit("move", {
                             roomId,
                             currentFen: game.currentFen,
                             isWhiteTurn: game.isWhiteTurn,
+                            whiteTimeRemaining: game.whiteTimeRemaining,
+                            blackTimeRemaining: game.blackTimeRemaining
                         })
                     }
                 }
@@ -163,6 +240,8 @@ export const socketFunctions = (io: Server) => {
                     isWhiteTurn: game.isWhiteTurn,
                     blackPlayer: game.blackPlayer,
                     whitePlayer: game.whitePlayer,
+                    whiteTimeRemaining: game.whiteTimeRemaining,
+                    blackTimeRemaining: game.blackTimeRemaining
                 })
             } else if (team === "black") {
                 socket.join(roomId)
@@ -172,6 +251,8 @@ export const socketFunctions = (io: Server) => {
                     isWhiteTurn: game.isWhiteTurn,
                     blackPlayer: game.blackPlayer,
                     whitePlayer: game.whitePlayer,
+                    whiteTimeRemaining: game.whiteTimeRemaining,
+                    blackTimeRemaining: game.blackTimeRemaining
                 })
             }
         })
@@ -187,7 +268,7 @@ export const socketFunctions = (io: Server) => {
                         roomId: whiteGame.roomId,
                         winner: whiteGame.blackPlayer,
                     })
-                }, 60000)
+                }, 15000) // 15 seconds
                 activeGames.set(whiteGame.roomId, timeOutId)
             }
             if(blackGame){
@@ -197,7 +278,7 @@ export const socketFunctions = (io: Server) => {
                         roomId: blackGame.roomId,
                         winner: blackGame.whitePlayer,
                     })
-                }, 60000)
+                }, 15000) // 15 seconds
                 activeGames.set(blackGame.roomId, timeOutId)
             }
         })
