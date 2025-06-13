@@ -6,6 +6,7 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { connectDB } from './DB/connect.js';
 import { socketFunctions } from './socket.js';
+import gamesRoutes from './routes/gamesRoutes.js';
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/users', userRoutes);
+app.use('/games', gamesRoutes)
 
 const server = http.createServer(app);
 const io = new SocketIOServer(server, {
