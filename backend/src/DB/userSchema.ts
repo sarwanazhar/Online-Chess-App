@@ -22,6 +22,10 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    elo: {
+        type: Number,
+        default: 1000,
+    }
 })
 
 const User = mongoose.model('User', userSchema);

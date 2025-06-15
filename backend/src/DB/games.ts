@@ -88,6 +88,22 @@ const gameSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    whiteEloChange: {
+        type: Number,
+        default: 0,
+    },
+    blackEloChange: {
+        type: Number,
+        default: 0,
+    },
+    whiteElo: {
+        type: Number,
+        required: true,
+    },
+    blackElo: {
+        type: Number,
+        required: true,
+    },
 });
 
 const Game = mongoose.model('Game', gameSchema);

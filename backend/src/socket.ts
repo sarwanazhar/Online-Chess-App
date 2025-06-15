@@ -2,6 +2,8 @@ import { Server } from "socket.io";
 import { Chess } from "chess.js";
 import Game from "./DB/games.js";
 import { v4 as uuidv4 } from 'uuid';
+import calculateElo from "./libs/calculateElo.js";
+import User from "./DB/userSchema.js";
 
 let waitingUsers = new Map<string, { userId: string, socket: any, timeControl: string }>();
 const DEFAULT_POSITION = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -45,6 +47,9 @@ export const socketFunctions = (io: Server) => {
                 matchedPlayer.socket.join(roomId);
 
                 const createGame = async () => {
+                    const whiteElo = await User.findById(userId);
+                    const blackElo = await User.findById(matchedPlayer.userId);
+                    console.log(whiteElo,blackElo);
                     const timeSettings = TIME_CONTROLS[timeControl as keyof typeof TIME_CONTROLS];
                     const game = new Game({
                         roomId,
@@ -58,7 +63,9 @@ export const socketFunctions = (io: Server) => {
                         whiteTimeRemaining: timeSettings.initial,
                         blackTimeRemaining: timeSettings.initial,
                         timeIncrement: timeSettings.increment,
-                        lastMoveTime: Date.now()
+                        lastMoveTime: Date.now(),
+                        whiteElo: whiteElo?.elo,
+                        blackElo: blackElo?.elo,
                     })
                     await game.save();
                     game.populate("whitePlayer blackPlayer");
@@ -86,7 +93,7 @@ export const socketFunctions = (io: Server) => {
             if(!game) {
                 return;
             }
-            let team = game.whitePlayer == userId ? "white" : "black";
+            let team = game.whitePlayer.toString() === userId ? "white" : "black";
             console.log(team);
             if(team === "white" && !game.isWhiteTurn){
                 return;
@@ -111,6 +118,9 @@ export const socketFunctions = (io: Server) => {
                     game.lastMoveTime = currentTime; 
                     console.log(game.whiteTimeRemaining);
                     if(game.whiteTimeRemaining <= 0){
+                        const {newWhite, newBlack} = calculateElo(game.whiteElo, game.blackElo, "white");
+                        await User.findByIdAndUpdate(game.whitePlayer, {elo: newWhite});
+                        await User.findByIdAndUpdate(game.blackPlayer, {elo: newBlack});
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "black",
@@ -120,6 +130,9 @@ export const socketFunctions = (io: Server) => {
                         return;
                     }
                     if(chess.isCheckmate()){
+                        const {newWhite, newBlack} = calculateElo(game.whiteElo, game.blackElo, "white");
+                        await User.findByIdAndUpdate(game.whitePlayer, {elo: newWhite});
+                        await User.findByIdAndUpdate(game.blackPlayer, {elo: newBlack});
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "white",
@@ -128,6 +141,9 @@ export const socketFunctions = (io: Server) => {
                         await game.save();
                         return;
                     } else if(chess.isStalemate()){
+                        const {newWhite, newBlack} = calculateElo(game.whiteElo, game.blackElo, "draw");
+                        await User.findByIdAndUpdate(game.whitePlayer, {elo: newWhite});
+                        await User.findByIdAndUpdate(game.blackPlayer, {elo: newBlack});
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "draw",
@@ -136,6 +152,9 @@ export const socketFunctions = (io: Server) => {
                         await game.save();
                         return;
                     }else if (chess.isDraw()){
+                        const {newWhite, newBlack} = calculateElo(game.whiteElo, game.blackElo, "draw");
+                        await User.findByIdAndUpdate(game.whitePlayer, {elo: newWhite});
+                        await User.findByIdAndUpdate(game.blackPlayer, {elo: newBlack});
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "draw",
@@ -173,6 +192,9 @@ export const socketFunctions = (io: Server) => {
                     game.lastMoveTime = currentTime;
                     console.log(game.blackTimeRemaining);
                     if(game.blackTimeRemaining <= 0){
+                        const {newWhite, newBlack} = calculateElo(game.whiteElo, game.blackElo, "black");
+                        await User.findByIdAndUpdate(game.whitePlayer, {elo: newWhite});
+                        await User.findByIdAndUpdate(game.blackPlayer, {elo: newBlack});
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "white",
@@ -182,6 +204,9 @@ export const socketFunctions = (io: Server) => {
                         return;
                     }
                     if(chess.isCheckmate()){
+                        const {newWhite, newBlack} = calculateElo(game.whiteElo, game.blackElo, "black");
+                        await User.findByIdAndUpdate(game.whitePlayer, {elo: newWhite});
+                        await User.findByIdAndUpdate(game.blackPlayer, {elo: newBlack});
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "black",
@@ -190,6 +215,9 @@ export const socketFunctions = (io: Server) => {
                         await game.save();
                         return;
                     } else if(chess.isStalemate()){
+                        const {newWhite, newBlack} = calculateElo(game.whiteElo, game.blackElo, "draw");
+                        await User.findByIdAndUpdate(game.whitePlayer, {elo: newWhite});
+                        await User.findByIdAndUpdate(game.blackPlayer, {elo: newBlack});
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "draw",
@@ -198,6 +226,9 @@ export const socketFunctions = (io: Server) => {
                         await game.save();
                         return;
                     }else if (chess.isDraw()){
+                        const {newWhite, newBlack} = calculateElo(game.whiteElo, game.blackElo, "draw");
+                        await User.findByIdAndUpdate(game.whitePlayer, {elo: newWhite});
+                        await User.findByIdAndUpdate(game.blackPlayer, {elo: newBlack});
                         io.to(roomId).emit("gameOver", {
                             roomId,
                             winner: "draw",
@@ -263,6 +294,9 @@ export const socketFunctions = (io: Server) => {
             const blackGame = await Game.findOne ({blackPlayerSocketId: socket.id});
             if(whiteGame){
                 const timeOutId = setTimeout(async () => {
+                    const {newWhite, newBlack} = calculateElo(whiteGame.whiteElo, whiteGame.blackElo, "white");
+                    await User.findByIdAndUpdate(whiteGame.whitePlayer, {elo: newWhite});
+                    await User.findByIdAndUpdate(whiteGame.blackPlayer, {elo: newBlack});
                     await whiteGame.updateOne({$set: {isOngoing: false, winner: whiteGame.blackPlayer, whitePlayerSocketId: null, blackPlayerSocketId: null}})
                     io.to(whiteGame.roomId).emit("gameOver", {
                         roomId: whiteGame.roomId,
@@ -273,6 +307,9 @@ export const socketFunctions = (io: Server) => {
             }
             if(blackGame){
                 const timeOutId = setTimeout(async () => {
+                    const {newWhite, newBlack} = calculateElo(blackGame.whiteElo, blackGame.blackElo, "black");
+                    await User.findByIdAndUpdate(blackGame.whitePlayer, {elo: newWhite});
+                    await User.findByIdAndUpdate(blackGame.blackPlayer, {elo: newBlack});
                     await blackGame.updateOne({$set: {isOngoing: false, winner: blackGame.whitePlayer, whitePlayerSocketId: null, blackPlayerSocketId: null}})
                     io.to(blackGame.roomId).emit("gameOver", {
                         roomId: blackGame.roomId,
