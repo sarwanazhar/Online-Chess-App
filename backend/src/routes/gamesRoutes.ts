@@ -1,5 +1,6 @@
 import express from 'express';
 import Game from '../DB/games.js';
+import User from '../DB/userSchema.js';
 
 const router = express.Router();
 
@@ -21,5 +22,30 @@ router.get('/get-games/:userId', async (req, res) => {
     });
     res.json(games);
 });
+
+router.get("/get-games-by-user/:userId", async (req, res) => {
+    const { userId } = req.params;
+    const games = await Game.find({
+        $or: [
+            { whitePlayer: userId },
+            { blackPlayer: userId }
+        ]
+    });
+    const gamesWithPlayers = await Promise.all(games.map(async (game) => {
+        const whitePlayer = await User.findById(game.whitePlayer);
+        const blackPlayer = await User.findById(game.blackPlayer);
+        const winner = await User.findById(game.winner);
+        return {
+            id: game._id,
+            white: whitePlayer ? whitePlayer.name : null,
+            black: blackPlayer ? blackPlayer.name : null,
+            result: winner ? winner.name : null,
+            timeControl: game.timeControl,
+        };
+    }));
+    res.json(gamesWithPlayers);
+});
+
+
 
 export default router;

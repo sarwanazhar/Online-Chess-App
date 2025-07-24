@@ -31,7 +31,7 @@ const gameSchema = new mongoose.Schema({
     blackPlayer: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
+        required: false,
     },
     winner: {
         type: mongoose.Schema.Types.ObjectId,
@@ -104,6 +104,11 @@ const gameSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    invitationType: {
+        type: String,
+        enum: ['matchmaking', 'qr'],
+        default: 'matchmaking',
+    }    
 });
 
 const Game = mongoose.model('Game', gameSchema);

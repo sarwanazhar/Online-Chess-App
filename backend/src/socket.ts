@@ -14,7 +14,7 @@ const TIME_CONTROLS = {
     'bullet': { initial: 60000, increment: 0 },      // 1 minute
     'blitz': { initial: 300000, increment: 0 },     // 5 minutes
     'rapid': { initial: 600000, increment: 0 },     // 10 minutes
-    'classical': { initial: 1800000, increment: 0 } // 30 minutes
+    'classical': { initial: 600000, increment: 0 } // 10 minutes
 };
 
 export const socketFunctions = (io: Server) => {
@@ -30,7 +30,7 @@ export const socketFunctions = (io: Server) => {
             // Find a player with matching time control
             let matchedPlayer = null;
             for (const [socketId, player] of waitingUsers.entries()) {
-                if (socketId !== socket.id && player.timeControl == timeControl) {
+                if (socketId !== socket.id && player.timeControl === timeControl && player.userId !== userId) {
                     matchedPlayer = player;
                     break;
                 }
@@ -73,7 +73,9 @@ export const socketFunctions = (io: Server) => {
                     io.to(roomId).emit("gameStart", {
                         roomId,
                         whitePlayer: game.whitePlayer,
+                        whitePlayerName: whiteElo?.name,
                         blackPlayer: game.blackPlayer,
+                        blackPlayerName: blackElo?.name,
                         currentFen: game.currentFen,
                         isWhiteTurn: game.isWhiteTurn,
                         timeControl: timeControl,
@@ -110,7 +112,16 @@ export const socketFunctions = (io: Server) => {
                 } catch (e) {
                     console.log(e);
                 }
-                if (typeof chess.move(move) === "object") {
+                let moveResult: any;
+                try {
+                    moveResult = chess.move(move);
+                } catch (err) {
+                    console.error("Invalid move received from white side:", move, err);
+                    // Optionally notify the player that their move was invalid
+                    socket.emit("invalidMove", { roomId, move });
+                    return;
+                }
+                if (typeof moveResult === "object") {
                     console.log("move")
                     const currentTime = Date.now();
                     const timeElapsed = currentTime - game.lastMoveTime;
@@ -173,7 +184,11 @@ export const socketFunctions = (io: Server) => {
                             currentFen: game.currentFen,
                             isWhiteTurn: game.isWhiteTurn,
                             whiteTimeRemaining: game.whiteTimeRemaining,
-                            blackTimeRemaining: game.blackTimeRemaining
+                            blackTimeRemaining: game.blackTimeRemaining,
+                            move: {
+                                from: move.from,
+                                to: move.to
+                            }
                         })
                     }
                 }
@@ -185,7 +200,15 @@ export const socketFunctions = (io: Server) => {
                     console.log(e);
                 }
                 console.log(chess.fen());
-                if (typeof chess.move(move) === "object") {
+                let moveResult: any;
+                try {
+                    moveResult = chess.move(move);
+                } catch (err) {
+                    console.error("Invalid move received from black side:", move, err);
+                    socket.emit("invalidMove", { roomId, move });
+                    return;
+                }
+                if (typeof moveResult === "object") {
                     const currentTime = Date.now();
                     const timeElapsed = currentTime - game.lastMoveTime;
                     game.blackTimeRemaining = Math.max(0, game.blackTimeRemaining - timeElapsed + game.timeIncrement);
@@ -246,7 +269,11 @@ export const socketFunctions = (io: Server) => {
                             currentFen: game.currentFen,
                             isWhiteTurn: game.isWhiteTurn,
                             whiteTimeRemaining: game.whiteTimeRemaining,
-                            blackTimeRemaining: game.blackTimeRemaining
+                            blackTimeRemaining: game.blackTimeRemaining,
+                            move: {
+                                from: move.from,
+                                to: move.to
+                            }
                         })
                     }
                 }
@@ -290,30 +317,36 @@ export const socketFunctions = (io: Server) => {
         
         socket.on("disconnect", async () => {
             console.log("A user disconnected:", socket.id);
+            // Remove the user from the waiting queue if they were waiting to be matched
+            waitingUsers.delete(socket.id);
             const whiteGame = await Game.findOne ({whitePlayerSocketId: socket.id});
             const blackGame = await Game.findOne ({blackPlayerSocketId: socket.id});
             if(whiteGame){
                 const timeOutId = setTimeout(async () => {
-                    const {newWhite, newBlack} = calculateElo(whiteGame.whiteElo, whiteGame.blackElo, "white");
+                    // White player failed to reconnect ⇒ Black wins
+                    const {newWhite, newBlack} = calculateElo(whiteGame.whiteElo, whiteGame.blackElo, "black");
                     await User.findByIdAndUpdate(whiteGame.whitePlayer, {elo: newWhite});
                     await User.findByIdAndUpdate(whiteGame.blackPlayer, {elo: newBlack});
                     await whiteGame.updateOne({$set: {isOngoing: false, winner: whiteGame.blackPlayer, whitePlayerSocketId: null, blackPlayerSocketId: null}})
                     io.to(whiteGame.roomId).emit("gameOver", {
                         roomId: whiteGame.roomId,
                         winner: whiteGame.blackPlayer,
+                        reason: "opponent_disconnected"
                     })
                 }, 15000) // 15 seconds
                 activeGames.set(whiteGame.roomId, timeOutId)
             }
             if(blackGame){
                 const timeOutId = setTimeout(async () => {
-                    const {newWhite, newBlack} = calculateElo(blackGame.whiteElo, blackGame.blackElo, "black");
+                    // Black player failed to reconnect ⇒ White wins
+                    const {newWhite, newBlack} = calculateElo(blackGame.whiteElo, blackGame.blackElo, "white");
                     await User.findByIdAndUpdate(blackGame.whitePlayer, {elo: newWhite});
                     await User.findByIdAndUpdate(blackGame.blackPlayer, {elo: newBlack});
                     await blackGame.updateOne({$set: {isOngoing: false, winner: blackGame.whitePlayer, whitePlayerSocketId: null, blackPlayerSocketId: null}})
                     io.to(blackGame.roomId).emit("gameOver", {
                         roomId: blackGame.roomId,
                         winner: blackGame.whitePlayer,
+                        reason: "opponent_disconnected"
                     })
                 }, 15000) // 15 seconds
                 activeGames.set(blackGame.roomId, timeOutId)
