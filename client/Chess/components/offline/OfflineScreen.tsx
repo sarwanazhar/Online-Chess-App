@@ -4,8 +4,6 @@ import type { ChessboardRef } from "expo-chessboard";
 import { useRouter } from "expo-router";
 import { heightPercentageToDP as hp } from "react-native-responsive-screen";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { getBestAIMoveFromFen } from "@/libs/chessAi";
-import { Square } from "chess.js";
 
 const LazyChessboard = lazy(() => import("expo-chessboard"));
 const MemoizedChessboard = React.memo(
@@ -25,41 +23,12 @@ const MemoizedChessboard = React.memo(
   )),
 );
 
-export default function AILevel1Screen() {
+export default function OfflineScreen() {
   const chessboardRef = useRef<ChessboardRef>(null);
   const router = useRouter();
-  const turnRef = useRef<"black" | "white">("white");
-  const awaitingAI = useRef(false);
 
-  const handleMove = async (state: any) => {
-    console.log("Move event", { turn: turnRef.current });
-
-    if (awaitingAI.current) {
-      console.log("AI move in progress, ignoring");
-      return;
-    }
-
-    // After player's move (white), trigger AI's move (black)
-    if (turnRef.current === "white") {
-      console.log("User (white) played, now AI's turn");
-      turnRef.current = "black";
-
-      console.log("AI thinking...");
-      awaitingAI.current = true;
-
-      const move = getBestAIMoveFromFen(state.state.fen, 1);
-      console.log("AI move:", move);
-
-      if (move?.from && move?.to) {
-        await chessboardRef.current?.move({
-          from: move.from as Square,
-          to: move.to as Square,
-        });
-      }
-
-      turnRef.current = "white";
-      awaitingAI.current = false;
-    }
+  const handleMove = (state: any) => {
+    const { from, to } = state.move || state;
   };
 
   return (
@@ -73,14 +42,13 @@ export default function AILevel1Screen() {
           onPress={() => router.back()}
           style={styles.headerIcon}
         />
-        <Text style={styles.headerText}>Play vs AI - Level 1</Text>
+        <Text style={styles.headerText}>Playing Offline</Text>
       </View>
 
       <View style={styles.boardWrapper}>
         <MemoizedChessboard
           ref={chessboardRef}
           gestureEnabled
-          player="white"
           onMove={handleMove}
         />
       </View>

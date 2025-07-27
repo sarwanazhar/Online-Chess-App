@@ -78,6 +78,7 @@ export default function BlitzScreen() {
         message = didPlayerWin ? 'You won!' : 'You lost.';
       }
 
+      storage.delete('currentRoomId');
       socket.disconnect();
       Alert.alert('Game Over', message);
       router.replace('/');
@@ -92,10 +93,23 @@ export default function BlitzScreen() {
   useEffect(() => {
     const onConnect = () => {
       console.log('✅ Connected');
-      socket.emit('join', { userId, timeControl });
+      const storedRoomId = storage.getString('currentRoomId');
+      if (storedRoomId) {
+        socket.emit('rejoin', { userId, roomId: storedRoomId });
+      } else {
+        socket.emit('join', { userId, timeControl });
+      }
     };
 
     socket.on('connect', onConnect);
+
+    // Handle rejoined payload (update clocks/turn)
+    socket.on('rejoined', (data: { isWhiteTurn: boolean; whiteTimeRemaining: number; blackTimeRemaining: number; }) => {
+      console.log('🔄 Rejoined blitz', data);
+      setTurn(data.isWhiteTurn ? 'w' : 'b');
+      setWhiteTimeRemaining(data.whiteTimeRemaining);
+      setBlackTimeRemaining(data.blackTimeRemaining);
+    });
 
     socket.on('gameStart', (data: GameStartData) => {
       console.log('🔥 Game Started', data);
@@ -122,6 +136,7 @@ export default function BlitzScreen() {
     return () => {
       socket.off('connect', onConnect);
       socket.off('gameStart');
+      socket.off('rejoined');
     };
   }, [userId]);
 

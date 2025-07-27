@@ -1,40 +1,66 @@
-import React, { lazy, Suspense, useRef, useState } from 'react';
-import { StyleSheet, View, Text, StatusBar } from 'react-native';
-import { Game } from 'js-chess-engine';
-import type { ChessboardRef } from 'expo-chessboard';
-import { useRouter } from 'expo-router';
-import { heightPercentageToDP as hp } from 'react-native-responsive-screen';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import React, { lazy, Suspense, useRef, useState } from "react";
+import { StyleSheet, View, Text, StatusBar } from "react-native";
+import type { ChessboardRef } from "expo-chessboard";
+import { useRouter } from "expo-router";
+import { heightPercentageToDP as hp } from "react-native-responsive-screen";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { Square } from "chess.js";
+import { getBestAIMoveFromFen } from "@/libs/chessAi";
 
-const LazyChessboard = lazy(() => import('expo-chessboard'));
+const LazyChessboard = lazy(() => import("expo-chessboard"));
 const MemoizedChessboard = React.memo(
-  React.forwardRef<ChessboardRef, React.ComponentPropsWithRef<typeof LazyChessboard>>((props, ref) => (
-    <Suspense fallback={<View style={styles.loader}><Text style={{ color: '#fff' }}>Loading...</Text></View>}>
+  React.forwardRef<
+    ChessboardRef,
+    React.ComponentPropsWithRef<typeof LazyChessboard>
+  >((props, ref) => (
+    <Suspense
+      fallback={
+        <View style={styles.loader}>
+          <Text style={{ color: "#fff" }}>Loading...</Text>
+        </View>
+      }
+    >
       <LazyChessboard ref={ref} {...props} />
     </Suspense>
-  ))
+  )),
 );
 
-export default function AILevel2Screen() {
+export default function AILevel3Screen() {
   const chessboardRef = useRef<ChessboardRef>(null);
   const router = useRouter();
+  const turnRef = useRef<"black" | "white">("white");
+  const awaitingAI = useRef(false);
 
-  const [game] = useState(() => new Game());
-  const [fen, setFen] = useState(game.exportFEN());
+  const handleMove = async (state: any) => {
+    console.log("Move event", { turn: turnRef.current });
 
-  const handleMove = (state: any) => {
-    const { from, to } = state.move || state;
+    if (awaitingAI.current) {
+      console.log("AI move in progress, ignoring");
+      return;
+    }
 
-    if (!game.move(from.toUpperCase(), to.toUpperCase())) return false;
+    // After player's move (white), trigger AI's move (black)
+    if (turnRef.current === "white") {
+      console.log("User (white) played, now AI's turn");
+      turnRef.current = "black";
 
-    const aiObj = game.aiMove(1); // Level 1 difficulty
-    const aiFrom = Object.keys(aiObj)[0];
-    const aiTo = aiObj[aiFrom];
+      console.log("AI thinking...");
+      awaitingAI.current = true;
 
-    chessboardRef.current?.move({ from: aiFrom.toLowerCase(), to: aiTo.toLowerCase() });
-    setFen(game.exportFEN());
+      // Use level 3 for AILevel3Screen
+      const move = getBestAIMoveFromFen(state.state.fen, 2);
+      console.log("AI move:", move);
 
-    return true;
+      if (move?.from && move?.to) {
+        await chessboardRef.current?.move({
+          from: move.from as Square,
+          to: move.to as Square,
+        });
+      }
+
+      turnRef.current = "white";
+      awaitingAI.current = false;
+    }
   };
 
   return (
@@ -54,7 +80,6 @@ export default function AILevel2Screen() {
       <View style={styles.boardWrapper}>
         <MemoizedChessboard
           ref={chessboardRef}
-          fen={fen}
           gestureEnabled
           player="white"
           onMove={handleMove}
@@ -65,10 +90,15 @@ export default function AILevel2Screen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#141E30' },
-  header: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', height: hp(8) },
-  headerIcon: { position: 'absolute', left: hp(2) },
-  headerText: { color: 'white', fontSize: hp(2.8), fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: "#141E30" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    height: hp(8),
+  },
+  headerIcon: { position: "absolute", left: hp(2) },
+  headerText: { color: "white", fontSize: hp(2.8), fontWeight: "bold" },
   boardWrapper: { flex: 1, marginTop: hp(25) },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' }
-}); 
+  loader: { flex: 1, justifyContent: "center", alignItems: "center" },
+});

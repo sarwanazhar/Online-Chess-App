@@ -9,7 +9,7 @@ export default function TabLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
         <Tabs screenOptions={{
-          tabBarStyle: { backgroundColor: '#2D2D2D', borderTopWidth: 0, height: hp('19%'), paddingTop: hp('2%'), paddingBottom: hp('2%') },
+          tabBarStyle: { backgroundColor: '#2D2D2D', borderTopWidth: 0, padding: hp(6) },
           tabBarActiveTintColor: '#007BFF',
           tabBarInactiveTintColor: '#CCCCCC',
           header: (props) => <Header {...props} />,

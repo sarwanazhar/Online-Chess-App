@@ -52,7 +52,7 @@ const gameSchema = new mongoose.Schema({
         default: Date.now,
     },
     currentFen: {
-        required: true,
+        required: false,
         type: String,
     },
     isWhiteTurn: {
@@ -70,23 +70,23 @@ const gameSchema = new mongoose.Schema({
     },
     timeControl: {
         type: String,
-        required: true,
+        required: false,
     },
     whiteTimeRemaining: {
         type: Number,
-        required: true,
+        required: false,
     },
     blackTimeRemaining: {
         type: Number,
-        required: true,
+        required: false,
     },
     timeIncrement: {
         type: Number,
-        required: true,
+        required: false,
     },
     lastMoveTime: {
         type: Number,
-        required: true,
+        required: false,
     },
     whiteEloChange: {
         type: Number,
@@ -98,11 +98,11 @@ const gameSchema = new mongoose.Schema({
     },
     whiteElo: {
         type: Number,
-        required: true,
+        required: false,
     },
     blackElo: {
         type: Number,
-        required: true,
+        required: false,
     },
     invitationType: {
         type: String,

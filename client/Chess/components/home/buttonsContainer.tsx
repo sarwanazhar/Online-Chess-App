@@ -7,10 +7,14 @@ import Entypo from '@expo/vector-icons/build/Entypo';
 import { router } from 'expo-router';
 import { useQuickmatchStore } from '@/store/useQuickmatchStore';
 import { usePlayWithAIStore } from '@/store/usePlayWithAIStore';
+import { useCreateGameModalStore } from '@/store/useCreateGameModalStore';
+import { useJoinGameModalStore } from '@/store/useJoinGameModalStore';
 
 const buttonsContainer = ({ scrollToTop }: { scrollToTop: () => void }) => {
     const { setIsQuickmatch } = useQuickmatchStore();
     const { setIsPlayWithAI } = usePlayWithAIStore();
+    const { setIsCreateGameModalOpen } = useCreateGameModalStore();
+    const { setIsJoinGameModalOpen } = useJoinGameModalStore();
   return (
     <View style={styles.buttonsContainer}>
         {/* Quick Match */}
@@ -38,7 +42,10 @@ const buttonsContainer = ({ scrollToTop }: { scrollToTop: () => void }) => {
             </View>
         </TouchableOpacity>
         {/* Create Game */}
-        <TouchableOpacity style={styles.button2}>
+        <TouchableOpacity style={styles.button2} onPress={() => {
+            setIsCreateGameModalOpen(true);
+            scrollToTop();
+        }}>
             <View style={styles.buttonContent2}>
             <Entypo name="plus" color="#FFF" size={hp(3.2)} style={styles.buttonIcon} />
                 <Text style={styles.buttonText2}>
@@ -47,7 +54,10 @@ const buttonsContainer = ({ scrollToTop }: { scrollToTop: () => void }) => {
             </View>
         </TouchableOpacity>
         {/* Join Game */}
-        <TouchableOpacity style={styles.button2}>
+        <TouchableOpacity style={styles.button2} onPress={() => {
+            setIsJoinGameModalOpen(true);
+            scrollToTop();
+        }}>
             <View style={styles.buttonContent2}>
                 <Entypo name="magnifying-glass" color="#FFF" size={hp(3.2)} style={styles.buttonIcon} />
                 <Text style={styles.buttonText2}>

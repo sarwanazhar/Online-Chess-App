@@ -10,6 +10,10 @@ import { useGamesInfoStore } from '@/store/useGamesInfo';
 import { storage } from '@/libs/storage';
 import PlayWithAIModal from '@/components/modals/playWithAIModal';
 import { usePlayWithAIStore } from '@/store/usePlayWithAIStore';
+import CreateGameModal from '@/components/modals/CreateGameModal';
+import { useCreateGameModalStore } from '@/store/useCreateGameModalStore';
+import JoinGameModal from '@/components/modals/JoinGameModal';
+import { useJoinGameModalStore } from '@/store/useJoinGameModalStore';
 
 interface Game {
   id: string;
@@ -22,6 +26,8 @@ interface Game {
 const Home = () => {
   const { isQuickmatch } = useQuickmatchStore();
   const { isPlayWithAI } = usePlayWithAIStore();
+  const { isCreateGameModalOpen } = useCreateGameModalStore();
+  const { isJoinGameModalOpen } = useJoinGameModalStore();
   const scrollRef = useRef<ScrollView>(null);
   const userId = storage.getString("id");
   const [games, setGames] = useState<Game[] | null>(null)
@@ -50,10 +56,12 @@ const Home = () => {
   console.log(isQuickmatch);
   return (
     <>
-      <ScrollView style={styles.mainContainer} scrollEnabled={!isQuickmatch && !isPlayWithAI} ref={scrollRef}>
+      <ScrollView style={styles.mainContainer} scrollEnabled={!isQuickmatch && !isPlayWithAI && !isCreateGameModalOpen && !isJoinGameModalOpen} ref={scrollRef}>
         <StatusBar backgroundColor="#1A1A1A" barStyle="light-content" />
         {isQuickmatch && <Quickmatch />}
         {isPlayWithAI && <PlayWithAIModal />}
+        {isCreateGameModalOpen && <CreateGameModal />}
+        {isJoinGameModalOpen && <JoinGameModal />}
         <HeaderContainer />
         <ButtonsContainer scrollToTop={scrollToTop} />
         <RecentGames games={games || []} scrollEnabled={false} />

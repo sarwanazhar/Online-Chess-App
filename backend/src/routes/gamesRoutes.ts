@@ -1,6 +1,8 @@
 import express from 'express';
 import Game from '../DB/games.js';
 import User from '../DB/userSchema.js';
+import { v4 as uuidv4 } from 'uuid';
+import { DEFAULT_POSITION } from '../socket.js';
 
 const router = express.Router();
 
@@ -27,8 +29,8 @@ router.get("/get-games-by-user/:userId", async (req, res) => {
     const { userId } = req.params;
     const games = await Game.find({
         $or: [
-            { whitePlayer: userId },
-            { blackPlayer: userId }
+            { whitePlayer: userId, isOngoing: false },
+            { blackPlayer: userId, isOngoing: false }
         ]
     });
     const gamesWithPlayers = await Promise.all(games.map(async (game) => {
@@ -46,6 +48,28 @@ router.get("/get-games-by-user/:userId", async (req, res) => {
     res.json(gamesWithPlayers);
 });
 
+router.post('/create-game', async (req, res) => {
+    const {userId, timeControl}: {userId: string, timeControl: string} = req.body;
+    const game = new Game({
+        whitePlayer: userId,
+        blackPlayer: null,
+        timeControl: timeControl,
+        invitationType: "qr",
+        roomId: uuidv4(),
+        currentFen: DEFAULT_POSITION,
+        isWhiteTurn: true,
+        isOngoing: true,
+    });
+    await game.save();
 
+    const roomId = game.roomId;
+    const url = `chess://room/${roomId}?timeControl=${timeControl}`;
+
+    res.json({
+        url,
+        roomId,
+        timeControl,
+    });
+});
 
 export default router;
